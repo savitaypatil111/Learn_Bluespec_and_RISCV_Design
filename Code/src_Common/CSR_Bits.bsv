@@ -81,6 +81,18 @@ Bit #(XLEN) mask_MSTATUS_MPP  = truncate (64'h_3 << bitpos_MSTATUS_MPP);
 Bit #(XLEN) mask_MSTATUS_MPRV = truncate (64'h_1 << bitpos_MSTATUS_MPRV);
 
 // ****************************************************************
+// MIP/MIE fields
+
+Integer bitpos_MIx_SSIx = 1;
+Integer bitpos_MIx_MSIx = 3;
+
+Integer bitpos_MIx_STIx = 5;
+Integer bitpos_MIx_MTIx = 7;
+
+Integer bitpos_MIx_SEIx = 9;
+Integer bitpos_MIx_MEIx = 11;
+
+// ****************************************************************
 // Exception causes
 
 Bit #(XLEN) cause_interrupt_bit = (1 << (xlen-1));

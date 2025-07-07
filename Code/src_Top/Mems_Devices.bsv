@@ -31,12 +31,14 @@ import Store_Buffer :: *;
 // Debugging support
 
 Integer verbosity = 0;
+Integer verbosity_CLINT = 0;
 
 // ****************************************************************
 
 interface Mems_Devices_IFC;
    method Action init (Initial_Params initial_params);
    method ActionValue #(Bit #(64)) rd_MTIME;
+   method Bit #(1) mv_MTIP;
 endinterface
 
 // ****************************************************************
@@ -67,40 +69,138 @@ module mkMems_Devices #(FIFOF_O #(Mem_Req) fo_IMem_req,
    Reg #(Bool)  rg_running <- mkReg (False);
    Reg #(File)  rg_logfile <- mkReg (InvalidFile);
 
-   Reg #(Bit #(64)) rg_MTIME <- mkReg (0);
+   // ****************************************************************
+   // MTIME and MTIMECMP
+
+   // Bit #(64) addr_base_CLINT = 'h_1000_0000;
+   Bit #(64) addr_base_CLINT = 'h_0200_0000;
+   Bit #(64) addr_MTIME      = addr_base_CLINT + 'h_BFF8;
+   Bit #(64) addr_MTIMECMP   = addr_base_CLINT + 'h_4000;
+
+   Reg #(Bit #(64)) rg_MTIME    <- mkReg (0);
+   Reg #(Bit #(64)) rg_MTIMECMP <- mkReg (0);
+
+   function Bool for_MTIME (Mem_Req mr);
+      Bool access0 = ((mr.addr == addr_MTIME)
+		      && ((mr.size == MEM_4B) || (mr.size == MEM_8B)));
+      Bool access4 = ((mr.addr == addr_MTIME + 4)
+		      && (mr.size == MEM_4B));
+      return (access0 || access4);
+   endfunction
+
+   function Bool for_MTIMECMP (Mem_Req mr);
+      Bool access0 = ((mr.addr == addr_MTIMECMP)
+		      && ((mr.size == MEM_4B) || (mr.size == MEM_8B)));
+      Bool access4 = ((mr.addr == addr_MTIMECMP + 4)
+		      && (mr.size == MEM_4B));
+      return (access0 || access4);
+   endfunction
+
+   function ActionValue #(Tuple2 #(Mem_Rsp_Type, Bit #(64)))
+            fav_MTIME_MTIMECMP (Mem_Req mem_req, Reg #(Bit #(64)) rg);
+      actionvalue
+
+	 Mem_Rsp_Type mem_rsp_type = MEM_RSP_ERR;
+	 Bit #(64)    rdata        = rg;
+	 Bit #(64)    wdata        = ?;
+
+	 // Loads
+	 if (mem_req.req_type == funct5_LOAD) begin
+	    mem_rsp_type = MEM_RSP_OK;
+	    if (mem_req.addr [2] == 0)  begin
+	       if (mem_req.size == MEM_4B)
+		  rdata = zeroExtend (rg [31:0]);
+	    end
+	    else
+	       rdata = zeroExtend (rg [63:32]);
+	 end
+
+	 // Stores
+	 else begin
+	    mem_rsp_type = MEM_RSP_OK;
+
+	    if (mem_req.addr [2] == 0)  begin
+	       if (mem_req.size == MEM_4B)
+		  wdata = { rg [63:32], mem_req.data [31:0] };
+	       else
+		  wdata = mem_req.data;
+	    end
+	    else
+	       wdata = { mem_req.data [31:0], rg [31:0] };
+	    rg   <= wdata;
+	    rdata = wdata;
+
+	 end
+
+	 if (verbosity_CLINT != 0) begin
+	    $display (fshow_Mem_Req (mem_req));
+	    $write ("    => rsp_type: ", fshow (mem_rsp_type));
+	    if (mem_req.req_type == funct5_LOAD)
+	       $write ("  rdata %0h", rdata);
+	    else if (for_MTIMECMP (mem_req) && (wdata >= rg_MTIME))
+	       $write ("  ticks to timer IRQ: %0d", wdata - rg_MTIME);
+	    $display ("");
+	 end
+
+	 return tuple2 (mem_rsp_type, rdata);
+      endactionvalue
+   endfunction
 
    // ****************************************************************
    // BEHAVIOR
 
    // ================================================================
 
-   (* fire_when_enabled, no_implicit_conditions *)    // On every cycle
-   rule rl_count_MTIME;
-      rg_MTIME <= rg_MTIME + 1;
-   endrule
-
    function Action fa_mem_req_rsp (FIFOF_O #(Mem_Req) fo_mem_req,
 				   FIFOF_I #(Mem_Rsp) fi_mem_rsp,
 				   Client_ID          client_id,
 				   Integer            verbosity);
       action
+	 Mem_Rsp_Type mem_rsp_type = ?;
+	 Bit #(64)    rdata = ?;
+
 	 let mem_req <- pop_o (fo_mem_req);
-	 Bit #(128) wdata = zeroExtend (mem_req.data);
-	 Bit #(96) result <- c_mems_devices_req_rsp (mem_req.inum,
-						     zeroExtend (pack (mem_req.req_type)),
-						     zeroExtend (pack (mem_req.size)),
-						     mem_req.addr,
-						     zeroExtend (pack (client_id)),
-						     wdata);
+	 if (for_MTIME (mem_req)) begin
+	    if (verbosity_CLINT != 0) $display ("Accessing MTIME");
+	    match { .x, .y } <- fav_MTIME_MTIMECMP (mem_req, rg_MTIME);
+	    mem_rsp_type = x;
+	    rdata        = y;
+	 end
+	 else if (for_MTIMECMP (mem_req)) begin
+	    if (verbosity_CLINT != 0) $display ("Accessing MTIMECMP");
+	    match { .x, .y } <- fav_MTIME_MTIMECMP (mem_req, rg_MTIMECMP);
+	    mem_rsp_type = x;
+	    rdata        = y;
+	 end
+	 else begin
+	    Bit #(128) wdata   = zeroExtend (mem_req.data);
+	    Bit #(96)  result <- c_mems_devices_req_rsp (mem_req.inum,
+							 zeroExtend (pack (mem_req.req_type)),
+							 zeroExtend (pack (mem_req.size)),
+							 mem_req.addr,
+							 zeroExtend (pack (client_id)),
+							 wdata);
+	    mem_rsp_type = unpack (truncate (result [31:0]));
+	    rdata        = result [95:32];
+	    /*
+	    Mem_Rsp mem_rsp = Mem_Rsp {inum:     mem_req.inum,
+				       pc:       mem_req.pc,
+				       instr:    mem_req.instr,
+				       req_type: mem_req.req_type,
+				       size:     mem_req.size,
+				       addr:     mem_req.addr,
+				       rsp_type: unpack (truncate (result [31:0])),
+				       data:     result [95:32]};
+	    */
+	 end
 	 Mem_Rsp mem_rsp = Mem_Rsp {inum:     mem_req.inum,
 				    pc:       mem_req.pc,
 				    instr:    mem_req.instr,
 				    req_type: mem_req.req_type,
 				    size:     mem_req.size,
 				    addr:     mem_req.addr,
-				    rsp_type: unpack (truncate (result [31:0])),
-				    data:     result [95:32]};
-
+				    rsp_type: mem_rsp_type,
+				    data:     rdata};
 	 fi_mem_rsp.enq (mem_rsp);
 
 	 if (verbosity != 0) begin
@@ -136,17 +236,34 @@ module mkMems_Devices #(FIFOF_O #(Mem_Req) fo_IMem_req,
    endrule
 
    // ================================================================
+
+   (* descending_urgency =
+      "rl_IMem_req_rsp, rl_DMem_req_rsp, rl_MMIO_req_rsp, rl_Dbg_req_rsp, rl_count_MTIME" *)
+   rule rl_count_MTIME;
+      rg_MTIME <= rg_MTIME + 1;
+
+      if ((verbosity_CLINT != 0) && (rg_MTIME + 1 == rg_MTIMECMP))
+	 $display ("%0d: Mems_Devices: timer IRQ from next tick", cur_cycle);
+   endrule
+
+   // ================================================================
    // INTERFACE
 
    method Action init (Initial_Params initial_params) if (! rg_running);
       rg_logfile <= initial_params.flog;
       spec_sto_buf.init (initial_params);
       c_mems_devices_init (0);
+      rg_MTIME    <= 0;
+      rg_MTIMECMP <= '1;
       rg_running <= True;
    endmethod
 
    method ActionValue #(Bit #(64)) rd_MTIME;
       return rg_MTIME;
+   endmethod
+
+   method Bit #(1) mv_MTIP;
+      return pack (rg_MTIME >= rg_MTIMECMP);
    endmethod
 endmodule
 

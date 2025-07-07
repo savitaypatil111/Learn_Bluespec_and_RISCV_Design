@@ -19,6 +19,7 @@ import Assert :: *;
 
 import Cur_Cycle  :: *;
 import Semi_FIFOF :: *;
+import StmtFSM    :: *;
 
 // ----------------
 // Local imports
@@ -58,8 +59,6 @@ Integer verbosity = 0;
 // Choose either FSM version or explicit-rules version
 
 `ifndef DRUM_RULES
-
-import StmtFSM :: *;
 
 String cpu_name = "Drum v0.81 2024-08-09 (FSM)";
 
@@ -179,6 +178,8 @@ module mkCPU (CPU_IFC);
 	 rg_tval      <= tval;
       endaction
    endfunction
+
+   match { .can_take_intr, .cause } = csrs.can_take_interrupt;
 
    // ================================================================
    // Major CPU actions
@@ -399,8 +400,12 @@ module mkCPU (CPU_IFC);
 	 if (instr_opcode (x_direct.instr) == opcode_LOAD) begin
 	    if (instr_funct3 (x_direct.instr) == funct3_LB)
 	       data = signExtend (data [7:0]);
+	    else if (instr_funct3 (x_direct.instr) == funct3_LBU)
+	       data = zeroExtend (data [7:0]);
 	    else if (instr_funct3 (x_direct.instr) == funct3_LH)
 	       data = signExtend (data [15:0]);
+	    else if (instr_funct3 (x_direct.instr) == funct3_LHU)
+	       data = zeroExtend (data [15:0]);
 	    // TODO: LW in RV64
 	 end
 	 fa_update_rd (x_direct, truncate (data));
@@ -425,6 +430,22 @@ module mkCPU (CPU_IFC);
       log_Retire_exception (rg_flog, rg_Dispatch.to_Retire,
 			    rg_epc, is_interrupt, rg_cause, rg_tval);
    endaction;
+
+   // ----------------------------------------------------------------
+   function Action a_interrupt (Bit #(4) cause);
+      action
+	 Bool        is_interrupt = True;
+	 Bit #(XLEN) tval         = 0;
+	 Bit #(XLEN) tvec_pc <- csrs.mav_exception (rg_pc,
+						    is_interrupt,
+						    cause,
+						    tval);
+	 fa_redirect_Fetch (tvec_pc);
+
+	 log_Retire_exception (rg_flog, rg_Dispatch.to_Retire,
+			       rg_pc, is_interrupt, cause, tval);
+      endaction
+   endfunction
 
    // ****************************************************************
    // BEHAVIOR: FSM or Rules versions
@@ -482,6 +503,9 @@ module mkCPU (CPU_IFC);
 
    // Set TIME
    method Action set_TIME (Bit #(64) t) = csrs.set_TIME (t);
+
+
+   method Action set_MIP_MTIP (Bit #(1) v) = csrs.set_MIP_MTIP (v);
 
    // Debugger support
    // Requests from/responses to remote debugger

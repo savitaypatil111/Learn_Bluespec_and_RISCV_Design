@@ -531,6 +531,7 @@ int UART_16550_try_mem_access (UART_16550     *uart_p,
 		|| ((uart_p->out_linebuf_next + 1) == OUT_LINEBUF_SIZE)) {
 		uart_p->out_linebuf [uart_p->out_linebuf_next] = 0;
 		fprintf (stdout, "%s", uart_p->out_linebuf);
+		fflush (stdout);
 		uart_p->out_linebuf_next = 0;
 	    }
 	}

@@ -54,6 +54,10 @@ interface Retire_IFC;
    (* always_ready, always_enabled *)
    method Action set_TIME (Bit #(64) t);
 
+   // Set MIP.MTIP
+   (* always_ready, always_enabled *)
+   method Action set_MIP_MTIP (Bit #(1) v);
+
    // Debugger control
    // For haltreq/resumereq, True result means OK, False means error
    method ActionValue #(Bool) haltreq;
@@ -232,6 +236,37 @@ module mkRetire (Retire_IFC);
    Bool is_Int     = (x_rr_to_retire.exec_tag == EXEC_TAG_INT);
    Bool is_DMem    = (x_rr_to_retire.exec_tag == EXEC_TAG_DMEM);
 
+   // Interrupt
+   //     Tuple2 #(Bool, Bit #(4))
+   match { .can_take_intr, .intr_cause } = csrs.can_take_interrupt;
+   Bool take_interrupt = ((rg_mode == MODE_PIPE) && (! wrong_path) && can_take_intr);
+
+   // Conditions for retiring non-wrong-path instructions
+   Bool retire_PIPE             = ((rg_mode == MODE_PIPE) && (! wrong_path) && (! can_take_intr));
+   Bool retire_Direct           = (retire_PIPE && is_Direct && (! x_rr_to_retire.exception));
+   Bool retire_Direct_Exception = (retire_PIPE && is_Direct && x_rr_to_retire.exception);
+   Bool retire_Control          = (retire_PIPE && is_Control);
+   Bool retire_Int              = (retire_PIPE && is_Int);
+   Bool retire_DMem             = (retire_PIPE && is_DMem);
+
+   // ================================================================
+   // Take interrupt (MODE_PIPE; not wrong-path; can take interrupt)
+
+   rule rl_take_intr (take_interrupt);
+      Bool        is_interrupt = True;
+      Bit #(XLEN) tval         = 0;
+      Bit #(XLEN) tvec_pc <- csrs.mav_exception (x_rr_to_retire.pc,
+						 is_interrupt,
+						 intr_cause,
+						 tval);
+      Bool mispredicted = True;
+      Bool is_Halt_Req  = False;
+      fa_redirect_Fetch (mispredicted, is_Halt_Req, x_rr_to_retire, tvec_pc);
+
+      log_Retire_exception (rg_flog, x_rr_to_retire,
+			    x_rr_to_retire.pc, is_interrupt, intr_cause, tval);
+   endrule
+
    // ================================================================
    // Wrong-path; ignore and discard (all pipes)
 
@@ -289,10 +324,7 @@ module mkRetire (Retire_IFC);
    // ----------------
    // RR direct: CSRRxx
 
-   rule rl_Retire_CSRRxx ((rg_mode == MODE_PIPE)
-			  && (! wrong_path)
-			  && is_Direct
-			  && (! x_rr_to_retire.exception)
+   rule rl_Retire_CSRRxx (retire_Direct
 			  && is_legal_CSRRxx (x_rr_to_retire.instr));
       match { .exc, .rd_val } <- csrs.mav_csrrxx (x_rr_to_retire.instr,
 						  x_rr_to_retire.rs1_val);
@@ -322,17 +354,15 @@ module mkRetire (Retire_IFC);
    // ----------------
    // RR direct: MRET
 
-   rule rl_Retire_MRET ((rg_mode == MODE_PIPE)
-			&& (! wrong_path)
-			&& is_Direct
-			&& (! x_rr_to_retire.exception)
+   rule rl_Retire_MRET (retire_Direct
 			&& is_legal_MRET (x_rr_to_retire.instr));
       f_RR_to_Retire.deq;
+      let new_pc <- csrs.mav_xRET;
       Bool mispredicted = True;
       fa_redirect_Fetch (mispredicted,
 			 (rg_runstate == S5_HALTREQ),
 			 x_rr_to_retire,
-			 csrs.read_epc);
+			 new_pc);
       csrs.ma_incr_instret;
 
       log_Retire_MRET (rg_flog, x_rr_to_retire);
@@ -341,10 +371,7 @@ module mkRetire (Retire_IFC);
    // ----------------
    // RR direct: ECALL/EBREAK
 
-   rule rl_Retire_ECALL_EBREAK ((rg_mode == MODE_PIPE)
-				&& (! wrong_path)
-				&& is_Direct
-				&& (! x_rr_to_retire.exception)
+   rule rl_Retire_ECALL_EBREAK (retire_Direct
 				&& (is_legal_ECALL (x_rr_to_retire.instr)
 				    || (is_legal_EBREAK (x_rr_to_retire.instr)
 					&& (! ebreak_halt))));
@@ -362,10 +389,7 @@ module mkRetire (Retire_IFC);
    // ----------------
    // RR direct: EBREAK debug-halt
 
-   rule rl_Retire_EBREAK_dbg_halt ((rg_mode == MODE_PIPE)
-				   && (! wrong_path)
-				   && is_Direct
-				   && (! x_rr_to_retire.exception)
+   rule rl_Retire_EBREAK_dbg_halt (retire_Direct
 				   && is_legal_EBREAK (x_rr_to_retire.instr)
 				   && ebreak_halt);
       f_RR_to_Retire.deq;
@@ -382,10 +406,7 @@ module mkRetire (Retire_IFC);
    // ----------------
    // RR direct; exception
 
-   rule rl_Retire_Direct_exception ((rg_mode == MODE_PIPE)
-				    && (! wrong_path)
-				    && is_Direct
-				    && x_rr_to_retire.exception);
+   rule rl_Retire_Direct_exception (retire_Direct_Exception);
       rg_epc   <= x_rr_to_retire.pc;
       rg_cause <= x_rr_to_retire.cause;
       rg_tval  <= x_rr_to_retire.tval;
@@ -406,9 +427,7 @@ module mkRetire (Retire_IFC);
    // ================================================================
    // Retire EX_Control pipe
 
-   rule rl_Retire_EX_Control ((rg_mode == MODE_PIPE)
-			      && (! wrong_path)
-			      && is_Control);
+   rule rl_Retire_EX_Control (retire_Control);
       let x2 <- pop_o (to_FIFOF_O (f_EX_Control_to_Retire));
 
       // Unreserve/commit rd if needed
@@ -438,9 +457,7 @@ module mkRetire (Retire_IFC);
    // ================================================================
    // Retire EX Int pipe
 
-   rule rl_Retire_EX_Int ((rg_mode == MODE_PIPE)
-			  && (! wrong_path)
-			  && is_Int);
+   rule rl_Retire_EX_Int (retire_Int);
       EX_to_Retire x2 <- pop_o (to_FIFOF_O (f_EX_Int_to_Retire));
 
       // Unreserve/commit rd if needed
@@ -471,9 +488,7 @@ module mkRetire (Retire_IFC);
    // ================================================================
    // Retire EX DMem pipe, not deferred (speculative)
 
-   rule rl_Retire_EX_DMem ((rg_mode == MODE_PIPE)
-			   && (! wrong_path)
-			   && is_DMem
+   rule rl_Retire_EX_DMem (retire_DMem
 			   && (f_DMem_S_rsp.first.rsp_type != MEM_REQ_DEFERRED));
 
       let x2 <- pop_o (to_FIFOF_O (f_DMem_S_rsp));
@@ -485,8 +500,12 @@ module mkRetire (Retire_IFC);
       if (instr_opcode (x_rr_to_retire.instr) == opcode_LOAD) begin
 	 if (instr_funct3 (x_rr_to_retire.instr) == funct3_LB)
 	    data = signExtend (data [7:0]);
+	 else if (instr_funct3 (x_rr_to_retire.instr) == funct3_LBU)
+	    data = zeroExtend (data [7:0]);
 	 else if (instr_funct3 (x_rr_to_retire.instr) == funct3_LH)
 	    data = signExtend (data [15:0]);
+	 else if (instr_funct3 (x_rr_to_retire.instr) == funct3_LHU)
+	    data = zeroExtend (data [15:0]);
 	 // TODO: LW in RV64
       end
 
@@ -527,11 +546,8 @@ module mkRetire (Retire_IFC);
    // ================================================================
    // Retire EX DMem pipe: deferred (non-speculative)
 
-   rule rl_Retire_DMem_deferred ((rg_mode == MODE_PIPE)
-				 && (! wrong_path)
-				 && is_DMem
-				 && (f_DMem_S_rsp.first.rsp_type
-				     == MEM_REQ_DEFERRED));
+   rule rl_Retire_DMem_deferred (retire_DMem
+				 && (f_DMem_S_rsp.first.rsp_type == MEM_REQ_DEFERRED));
       let x2 <- pop_o (to_FIFOF_O (f_DMem_S_rsp));
 
       // Issue DMem request
@@ -584,8 +600,12 @@ module mkRetire (Retire_IFC);
 	 if (instr_opcode (x_rr_to_retire.instr) == opcode_LOAD) begin
 	    if (instr_funct3 (x_rr_to_retire.instr) == funct3_LB)
 	       data = signExtend (data [7:0]);
+	    else if (instr_funct3 (x_rr_to_retire.instr) == funct3_LBU)
+	       data = zeroExtend (data [7:0]);
 	    else if (instr_funct3 (x_rr_to_retire.instr) == funct3_LH)
 	       data = signExtend (data [15:0]);
+	    else if (instr_funct3 (x_rr_to_retire.instr) == funct3_LHU)
+	       data = zeroExtend (data [15:0]);
 	    // TODO: LW in RV64
 	 end
 
@@ -656,6 +676,9 @@ module mkRetire (Retire_IFC);
    // Set TIME
    method Action set_TIME (Bit #(64) t) = csrs.set_TIME (t);
 
+
+   // Set MIP.MTIP
+   method Action set_MIP_MTIP (Bit #(1) v) = csrs.set_MIP_MTIP (v);
 
    // ----------------------------------------------------------------
    // Debugger control

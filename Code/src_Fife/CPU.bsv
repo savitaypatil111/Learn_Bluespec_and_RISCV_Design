@@ -139,6 +139,9 @@ module mkCPU (CPU_IFC);
    // Set TIME
    method Action set_TIME (Bit #(64) t) = stage_Retire.set_TIME (t);
 
+
+   method Action set_MIP_MTIP (Bit #(1) v) = stage_Retire.set_MIP_MTIP (v);
+
    // Debugger support
    // Requests from/responses to remote debugger
    interface fi_dbg_to_CPU_pkt   = to_FIFOF_I (f_dbg_to_CPU_pkt);

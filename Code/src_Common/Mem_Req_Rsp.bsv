@@ -5,8 +5,9 @@ package Mem_Req_Rsp;
 
 // ****************************************************************
 
-import Arch       :: *;
-import Instr_Bits :: *;
+import Arch        :: *;
+import Instr_Bits  :: *;
+import Inter_Stage :: *;
 
 // ****************************************************************
 // Memory requests
@@ -47,11 +48,25 @@ typedef struct {Mem_Req_Type  req_type;
 		Bit #(64)     addr;
 		Bit #(64)     data;     // CPU => mem data
 
+		Epoch         epoch;    // Fife only: for store-buffer matching
+
 		Bit #(64)     inum;     // for debugging only
 		Bit #(XLEN)   pc;       // for debugging only
 		Bit #(32)     instr;
 } Mem_Req
 deriving (Bits, FShow);
+
+// ----------------
+
+function Bool misaligned (Mem_Req  mem_req);
+   let addr = mem_req.addr;
+   return case (mem_req.size)
+	     MEM_1B: False;
+	     MEM_2B: addr[0]   != 0;
+	     MEM_4B: addr[1:0] != 0;
+	     MEM_8B: addr[2:0] != 0;
+	  endcase;
+endfunction
 
 // ****************************************************************
 // Memory responses
@@ -103,7 +118,7 @@ function Fmt fshow_Mem_Req (Mem_Req x);
        && (x.req_type != funct5_FENCE)
        && (x.req_type != funct5_FENCE_I))
       fmt = fmt + $format (" data:%08h", x.data);
-   fmt = fmt + $format ("}");
+   fmt = fmt + $format (" epoch:%0d}", x.epoch);
    return fmt;
 endfunction
 

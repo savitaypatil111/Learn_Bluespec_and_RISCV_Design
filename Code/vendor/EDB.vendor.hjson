@@ -17,8 +17,8 @@
   // Optional: Pick specific files or subdirectories from upstream and
   // specify where to put them.
   mapping: [
-    {from: 'src_C/Dbg_Pkts.h',  to: 'Dbg_Pkts.h'},
-    {from: 'src_C/Dbg_Pkts.c',  to: 'Dbg_Pkts.c'},
-    {from: 'test/edbstub.c',    to: 'edbstub.c'}
+    {from: 'src_C/Dbg_Pkts.h',                to: 'Dbg_Pkts.h'},
+    {from: 'src_C/Dbg_Pkts.c',                to: 'Dbg_Pkts.c'},
+    {from: 'src_C/BDPI_RSPS_TCP_server.c',    to: 'BDPI_RSPS_TCP_server.c'}
   ]
 }

@@ -156,6 +156,17 @@
    seq
       if (pkt_in.pkt_type == Dbg_to_CPU_HALTREQ)
 	 stmt_haltreq;
+
+      // All other requests entertained only if halted
+      else if (rg_runstate != CPU_HALTED)
+	 action
+	    let dbg_rsp = Dbg_from_CPU_Pkt {pkt_type: Dbg_from_CPU_ERR,
+					    payload:  0};
+	    f_dbg_to_CPU_pkt.deq;
+	    f_dbg_from_CPU_pkt.enq (dbg_rsp);
+	    if (verbosity_CPU_Dbg > 1)
+	       $display ("    Returning ERR: CPU still running");
+	 endaction
       else if (pkt_in.pkt_type == Dbg_to_CPU_RESUMEREQ)
 	 stmt_resumereq;
       else if (pkt_in.pkt_type == Dbg_to_CPU_RW)

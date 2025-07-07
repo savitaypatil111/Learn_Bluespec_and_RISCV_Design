@@ -14,7 +14,6 @@ import Vector :: *;
 import Arch       :: *;
 import Instr_Bits :: *;
 import CSR_Bits   :: *;
-import Mem_Req_Rsp :: *;
 
 // ****************************************************************
 // Pipeline forward flow

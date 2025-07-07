@@ -9,7 +9,9 @@
 
    Reg #(CPU_ACTION) rg_action <- mkReg (A_FETCH);
 
-   rule rl_fetch (rg_running && (rg_action == A_FETCH));
+   rule rl_fetch ((rg_runstate == CPU_RUNNING)
+		  && (! can_take_intr)
+		  && (rg_action == A_FETCH));
       a_Fetch;
       rg_action <= A_DECODE;
    endrule
@@ -70,6 +72,17 @@
       if (rg_exception)
 	 a_exception;
       rg_action <= A_FETCH;
+   endrule
+
+
+   rule rl_take_interrupt ((rg_runstate == CPU_RUNNING)
+			   && (! can_take_intr));
+      a_interrupt (cause);
+   endrule
+
+   rule rl_halt (rg_runstate == CPU_HALTREQ);
+      csrs.save_dpc_dcsr_cause_prv (rg_pc, rg_dcsr_cause, priv_M);
+      rg_runstate <= CPU_HALTED;
    endrule
 
 // ****************************************************************

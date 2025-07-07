@@ -130,6 +130,15 @@ module mkTop (Empty);
    endrule
 
    // ================================================================
+   // Relay MTIP to CPU's CSRs module
+
+   (* fire_when_enabled, no_implicit_conditions *)
+   rule rl_relay_MTIP;
+      let t = mems_devices.mv_MTIP;
+      cpu.set_MIP_MTIP (t);
+   endrule
+
+   // ================================================================
    // INTERFACE
 
    // Empty

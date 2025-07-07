@@ -45,6 +45,8 @@
 			  csrs.save_dpc_dcsr_cause_prv (rg_pc, rg_dcsr_cause, priv_M);
 			  rg_runstate <= CPU_HALTED;
 		       endaction
+		    else if (can_take_intr)
+		       a_interrupt (cause);
 		    else
 		       exec_one_instr;
 	      endseq);

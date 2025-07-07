@@ -56,12 +56,18 @@ interface CSRs_IFC;
    // Returns PC from MEPC
    method ActionValue #(Bit #(XLEN)) mav_xRET ();
 
-   method Bit #(XLEN) read_epc;
    method Action ma_incr_instret;
 
    // Set TIME
    (* always_ready, always_enabled *)
    method Action set_TIME (Bit #(64) t);
+
+   // Set MIP.MTIP
+   (* always_ready, always_enabled *)
+   method Action set_MIP_MTIP (Bit #(1) v);
+
+   // Can take interrupt? (w. cause)
+   method Tuple2 #(Bool, Bit #(4)) can_take_interrupt;
 
    // Debugger support
    method ActionValue #(Bool)
@@ -93,6 +99,9 @@ module mkCSRs (CSRs_IFC);
    Reg #(Bit #(XLEN)) csr_mepc     <- mkReg (0);
    Reg #(Bit #(XLEN)) csr_mcause   <- mkReg (0);
    Reg #(Bit #(XLEN)) csr_mtval    <- mkReg (0);
+
+   // MIP
+   Reg #(Bit #(1))    csr_mip_mtip <- mkReg (0);
 
    Reg #(Bit #(32))   csr_dcsr     <- mkReg (0);
    Reg #(Bit #(XLEN)) csr_dpc      <- mkRegU;
@@ -130,18 +139,22 @@ module mkCSRs (CSRs_IFC);
 
 	 Bool exception = False;
 	 case (csr_addr)
+
 	    csr_addr_MISA:      noAction;    // read-only
 	    csr_addr_MVENDORID: noAction;    // read-only
 	    csr_addr_MARCHID:   noAction;    // read-only
 	    csr_addr_MIMPID:    noAction;    // read-only
 	    csr_addr_MHARTID:   noAction;    // read-only
-	    csr_addr_MSTATUS:  csr_mstatus  <= fn_legalize_mstatus (csr_val);
-	    csr_addr_MIE  :    csr_mie      <= csr_val;
-	    csr_addr_MTVEC:    csr_mtvec    <= csr_val;
-	    csr_addr_MSCRATCH: csr_mscratch <= csr_val;
-	    csr_addr_MEPC:     csr_mepc     <= csr_val;
-	    csr_addr_MCAUSE:   csr_mcause   <= csr_val;
-	    csr_addr_MTVAL:    csr_mtval    <= csr_val;
+
+	    csr_addr_MSTATUS:   csr_mstatus  <= fn_legalize_mstatus (csr_val);
+	    csr_addr_MIE:       csr_mie      <= csr_val;
+	    csr_addr_MIP:       noAction;    // read-only
+
+	    csr_addr_MTVEC:     csr_mtvec    <= csr_val;
+	    csr_addr_MSCRATCH:  csr_mscratch <= csr_val;
+	    csr_addr_MEPC:      csr_mepc     <= csr_val;
+	    csr_addr_MCAUSE:    csr_mcause   <= csr_val;
+	    csr_addr_MTVAL:     csr_mtval    <= csr_val;
 
 	    csr_addr_MCYCLE:    if (xlen == 32)
 				   csr_mcycle [1] <= {csr_mcycle [1] [63:32],
@@ -185,13 +198,17 @@ module mkCSRs (CSRs_IFC);
 	 Bool        exception = False;
 	 Bit #(XLEN) y         = ?;
 	 case (csr_addr)
+
 	    csr_addr_MISA:      y = misa;
 	    csr_addr_MVENDORID: y = 0;
 	    csr_addr_MARCHID:   y = 0;
 	    csr_addr_MIMPID:    y = 0;
 	    csr_addr_MHARTID:   y = 0;
+
 	    csr_addr_MSTATUS:   y = csr_mstatus;
 	    csr_addr_MIE:       y = csr_mie;
+	    csr_addr_MIP:       y = zeroExtend ({csr_mip_mtip, 7'b0});
+
 	    csr_addr_MTVEC:     y = csr_mtvec;
 	    csr_addr_MSCRATCH:  y = csr_mscratch;
 	    csr_addr_MEPC:      y = csr_mepc;
@@ -397,8 +414,6 @@ module mkCSRs (CSRs_IFC);
    // xRET actions
    method mav_xRET = fav_xRET;
 
-   method Bit #(XLEN) read_epc = csr_mepc;
-
    method Action ma_incr_instret;
       csr_minstret <= csr_minstret + 1;
    endmethod
@@ -406,6 +421,20 @@ module mkCSRs (CSRs_IFC);
    // Set TIME
    method Action set_TIME (Bit #(64) t);
       crg_csr_TIME [0] <= t;
+   endmethod
+
+   // Set MIP.MTIP
+   method Action set_MIP_MTIP (Bit #(1) v);
+      csr_mip_mtip <= v;
+   endmethod
+
+   // Can take interrupt? (w. cause)
+   method Tuple2 #(Bool, Bit #(4)) can_take_interrupt;
+      // Currently only timer interrupt
+      Bool ip    = (   (csr_mip_mtip == 1'b1)
+		    && (csr_mie [bitpos_MIx_MTIx] == 1'b1)
+		    && (csr_mstatus [bitpos_MSTATUS_MIE] == 1'b1));
+      return tuple2 (ip, cause_MACHINE_TIMER_INTERRUPT);
    endmethod
 
    // Debugger support

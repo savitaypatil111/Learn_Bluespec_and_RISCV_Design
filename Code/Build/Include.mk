@@ -6,9 +6,10 @@ help:
 	@echo "  b_compile b_link         bsc-compile and link for Bluesim"
 	@echo "  v_compile v_link         bsc-compile and link for Verilator"
 	@echo ""
-	@echo "  b_run      /v_run        run exe on test_memhex64, generating log.txt"
-	@echo "  b_run_hello/v_run_hello  ... on 'Hello World!' test"
-	@echo "  b_run_add  /v_run_add    ... on 'add' ISA test"
+	@echo "  b_run         /v_run             run exe on test_memhex64, generating log.txt"
+	@echo "  b_run_hello   /v_run_hello       ... on 'Hello World!' test"
+	@echo "  b_run_add     /v_run_add         ... on 'add' ISA test"
+	@echo "  b_run_FreeRTOS/v_run_FreeRTOS    ... on 'FreeRTOS' test"
 	@echo ""
 	@echo "  b_all = b_compile b_link b_run_hello"
 	@echo "  v_all = v_compile v_link v_run_hello"
@@ -41,7 +42,7 @@ SRC_COMMON = $(REPO)/src_Common
 TOPFILE   ?= $(SRC_TOP)/Top.bsv
 TOPMODULE ?= mkTop
 
-BSV_ADDITIONAL_LIBS = $(REPO)/vendor/bluespec_BSV_Additional_Libs
+MISC_LIBS = $(REPO)/vendor/bsc-contrib_Misc
 
 BSCFLAGS = -D $(RV) \
 	-use-dpi \
@@ -56,7 +57,7 @@ BSCFLAGS = -D $(RV) \
 C_FILES  = $(REPO)/src_Top/C_Mems_Devices.c
 C_FILES += $(REPO)/src_Top/UART_model.c
 C_FILES += $(REPO)/vendor/EDB/Dbg_Pkts.c
-C_FILES += $(REPO)/vendor/EDB/edbstub.c
+C_FILES += $(REPO)/vendor/EDB/BDPI_RSPS_TCP_server.c
 
 # Only needed if we import C code
 BSC_C_FLAGS += -Xl -v  -Xc -O3  -Xc++ -O3
@@ -68,7 +69,7 @@ endif
 # ----------------
 # bsc's directory search path
 
-BSCPATH = $(SRC_TOP):$(SRC_CPU):$(SRC_COMMON):$(BSV_ADDITIONAL_LIBS):+
+BSCPATH = $(SRC_TOP):$(SRC_CPU):$(SRC_COMMON):$(MISC_LIBS):+
 
 # ****************************************************************
 # FOR VERILATOR
@@ -125,6 +126,14 @@ v_run_add:
 	./$(EXEFILE)_verilator
 	@echo "INFO: Finished Simulation of add ISA test ..."
 
+.PHONY: v_run_FreeRTOS
+v_run_FreeRTOS:
+	@echo "INFO: Simulation of FreeRTOS ..."
+	ln -s -f ../../Tools/FreeRTOS/RTOSDemo.memhex32 \
+		test.memhex32
+	./$(EXEFILE)_verilator
+	@echo "INFO: Finished Simulation of FreeRTOS ..."
+
 # ****************************************************************
 # FOR BLUESIM
 
@@ -178,6 +187,14 @@ b_run_add:
 		test.memhex32
 	./$(EXEFILE)_bsim
 	@echo "INFO: Finished Simulation of add ISA test ..."
+
+.PHONY: b_run_FreeRTOS
+b_run_FreeRTOS:
+	@echo "INFO: Simulation of FreeRTOS ..."
+	ln -s -f ../../Tools/FreeRTOS/RTOSDemo.memhex32 \
+		test.memhex32
+	./$(EXEFILE)_bsim
+	@echo "INFO: Finished Simulation of FreeRTOS ..."
 
 # ****************************************************************
 # Create CSV file of first 100 instructions for viewing in any spreadsheet

@@ -32,9 +32,10 @@
 // ****************************************************************
 // Debugging message control
 
-static int verbosity_wild = 1;
-static int verbosity_mem  = 0;
-static int verbosity_MMIO = 0;
+static int verbosity_wild       = 1;
+static int verbosity_misaligned = 1;
+static int verbosity_mem        = 0;
+static int verbosity_MMIO       = 0;
 
 // ****************************************************************
 
@@ -485,6 +486,19 @@ void c_mems_devices_req_rsp (uint8_t        *result_p,
 	    }
 	    *status_p = MEM_RSP_ERR;
 	}
+	return;
+    }
+
+    // Return error if misaligned
+    uint64_t mask = 1;
+    if ((addr & ((mask << req_size_code) - 1)) != 0) {
+	if (verbosity_misaligned != 0) {
+	    fprintf_client (stdout, "ERROR: c_mem_req(): misaligned address for ",
+			    client, "\n");
+	    fprint_mem_req (stdout, inum, req_type, size_B, addr, wdata_p);
+	}
+	uint32_t *status_p = (uint32_t *) result_p;
+	*status_p = MEM_RSP_MISALIGNED;
 	return;
     }
 

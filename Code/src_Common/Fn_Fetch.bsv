@@ -52,6 +52,7 @@ function ActionValue #(Result_F)
 			   size:     MEM_4B,
 			   addr:     zeroExtend (pc),
 			   data :    ?,
+			   epoch:    epoch,            // Not required for Fetch
 			   // Debugging
 			   inum:     inum,
 			   pc:       pc,

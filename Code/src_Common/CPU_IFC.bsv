@@ -45,6 +45,10 @@ interface CPU_IFC;
    (* always_ready, always_enabled *)
    method Action set_TIME (Bit #(64) t);
 
+   // Set MIP.MTIP
+   (* always_ready, always_enabled *)
+   method Action set_MIP_MTIP (Bit #(1) v);
+
    // Debugger support
    // Requests from/responses to remote debugger
    interface FIFOF_I #(Dbg_to_CPU_Pkt)   fi_dbg_to_CPU_pkt;

@@ -107,6 +107,8 @@ function ActionValue #(Result_Dispatch)
 				addr:     zeroExtend (eaddr),
 				data:     zeroExtend (rs2_val),
 
+				epoch:    x.epoch,
+				// Debugging
 				inum:     x.inum,
 				pc:       x.pc,
 				instr:    x.instr};
