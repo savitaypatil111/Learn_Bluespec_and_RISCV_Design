@@ -1,5 +1,4 @@
-// Copyright (c) 2023-2024 Bluespec, Inc.  All Rights Reserved.
-// Author: Rishiyur S. Nikhil
+// Copyright (c) 2023-2024 Rishiyur S. Nikhil.  All Rights Reserved.
 
 // WARNING: This file is not a standalone package;
 // WARNING: it is "included" into other BSV files
@@ -74,9 +73,8 @@
       rg_action <= A_FETCH;
    endrule
 
-
    rule rl_take_interrupt ((rg_runstate == CPU_RUNNING)
-			   && (! can_take_intr));
+			   && can_take_intr);
       a_interrupt (cause);
    endrule
 

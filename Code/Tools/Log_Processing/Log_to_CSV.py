@@ -69,9 +69,12 @@ def main (argv = None):
     for e in events:
         (inum, pc, instr, tick, stage) = e
         if (inum > cur_inum):
-            f_data.write ("Inum:{:0d} PC:{:08x} instr:{:08x}\n".format (inum, pc, instr))
+            f_data.write ("Inum:{:0d} PC:{:08x}\n".format (inum, pc))
             cur_inum = inum
-        f_data.write ("    {:0d} {:s}\n".format (tick, stage))
+        f_data.write ("    {:0d} {:s}".format (tick, stage))
+        if (stage == "D"):
+            f_data.write ("    instr:{:08x}".format (instr))
+        f_data.write ("\n")
     f_data.close()
 
     # ----------------
@@ -161,7 +164,7 @@ def read_trace_file (f_in, inum1, inum2):
         if line == "": break
         line_num += 1
         words = line.split()
-        # Ignore lines that dont's begin with "Trace"
+        # Ignore lines that don't begin with "Trace"
         if words [0] != "Trace": continue
 
         if (debug):

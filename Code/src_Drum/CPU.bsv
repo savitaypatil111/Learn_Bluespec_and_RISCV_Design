@@ -1,5 +1,4 @@
-// Copyright (c) 2023-2024 Bluespec, Inc.  All Rights Reserved.
-// Author: Rishiyur S. Nikhil
+// Copyright (c) 2023-2025 Rishiyur S. Nikhil.  All Rights Reserved.
 
 package CPU;
 
@@ -44,11 +43,14 @@ import Fn_Dispatch :: *;
 import Fn_EX_Control :: *;
 import Fn_EX_Int     :: *;
 
+import RVFI_DII_Types :: *;    // For 'RVFI_DII_Execution' struct
+import RVFI_Report    :: *;
+
 // ****************************************************************
 // Debugger control
 
 typedef enum {CPU_RUNNING,
-              CPU_HALTREQ,     // halt requested
+              CPU_HALTREQ,     // halt requested (only if we have a HW debugger)
               CPU_HALTED
 } CPU_RunState
 deriving (Bits, Eq, FShow);
@@ -60,11 +62,11 @@ Integer verbosity = 0;
 
 `ifndef DRUM_RULES
 
-String cpu_name = "Drum v0.81 2024-08-09 (FSM)";
+String cpu_name = "Drum (FSM version) v0.86 2025-09-09";
 
 `else
 
-String cpu_name = "Drum v0.81 2024-08-09 (Rules)";
+String cpu_name = "Drum (Rules version) v0.86 2025-09-09";
 
 typedef enum {
    A_FETCH,
@@ -124,6 +126,12 @@ module mkCPU (CPU_IFC);
    Reg #(Bit #(4))    rg_cause     <- mkRegU;
    Reg #(Bit #(XLEN)) rg_tval      <- mkRegU;
 
+
+   // Certain invocations, shared with Fife, need an 'epoch' argument.
+   // This is not relevant for Drum; conceptually, epoch is always 0.
+
+   Epoch dummy_epoch = 0;
+
    // ================================================================
    // Debugger control
    Reg #(Bit #(XLEN)) rg_dpc        <- mkRegU;
@@ -140,6 +148,11 @@ module mkCPU (CPU_IFC);
 
    Bool is_running = (rg_runstate != CPU_HALTED);
    Bool is_halted  = (rg_runstate == CPU_HALTED);
+
+   // ****************************************************************
+   // RVFI reporting
+
+   RVFI_Report_IFC rvfi_report <- mkRVFI_Report;
 
    // ****************************************************************
    // BEHAVIOR: Actions
@@ -164,6 +177,7 @@ module mkCPU (CPU_IFC);
    function Action fa_redirect_Fetch (Bit #(XLEN) next_pc);
       action
 	 rg_pc   <= next_pc;
+
 	 rg_inum <= rg_inum + 1;
       endaction
    endfunction
@@ -196,12 +210,15 @@ module mkCPU (CPU_IFC);
 	 $display ("CPU: SINGLE STEP PC:%0x", rg_pc);
       end
 
-
+      // The following is only for branch-prediction; not used in Drum
       let predicted_pc = 0;
-      let epoch        = 0;
-      let y <- fn_Fetch (rg_pc,
-			 predicted_pc, epoch, rg_inum, rg_flog);
 
+      let y <- fn_Fetch (rg_pc,
+			 predicted_pc,
+			 dummy_epoch,
+			 rg_inum,
+			 rg_inum,
+			 rg_flog);
       rg_Fetch_to_Decode <= y.to_D;
       f_IMem_req.enq (y.mem_req);
 
@@ -217,7 +234,6 @@ module mkCPU (CPU_IFC);
 
       log_Decode (rg_flog, y, mem_rsp);
    endaction;
-
    // ----------------------------------------------------------------
    Action a_Register_Read_and_Dispatch =
    action
@@ -256,6 +272,7 @@ module mkCPU (CPU_IFC);
 	 fa_setup_exception (x_direct.pc,        // epc
 			     x_direct.cause,     // cause
 			     x_direct.tval);     // tval
+
 	 log_Retire_Direct_exc (rg_flog, x_direct);
       end
       // ----------------
@@ -269,7 +286,12 @@ module mkCPU (CPU_IFC);
 	 else begin
 	    fa_update_rd (x_direct, rd_val);
 	    fa_redirect_Fetch (x_direct.fallthru_pc);
+	    rvfi_report.rvfi_CSRRxx (x_direct,
+				     rd_val,
+				     csrs.mv_instret,
+				     dummy_epoch);
 	 end
+
 	 log_Retire_CSRRxx (rg_flog, exc, x_direct);
       end
       // ----------------
@@ -277,6 +299,11 @@ module mkCPU (CPU_IFC);
 	 let new_pc <- csrs.mav_xRET;
 	 fa_redirect_Fetch (new_pc);
 	 csrs.ma_incr_instret;
+
+	 rvfi_report.rvfi_MRET (x_direct,
+				new_pc,
+				csrs.mv_instret,
+				dummy_epoch);
 	 log_Retire_MRET (rg_flog, x_direct);
       end
       // ----------------
@@ -291,6 +318,7 @@ module mkCPU (CPU_IFC);
 				cause,
 				0);             // tval
 	    csrs.ma_incr_instret;
+
 	    log_Retire_ECALL_EBREAK (rg_flog, x_direct);
 	 end
       // ----------------
@@ -330,6 +358,10 @@ module mkCPU (CPU_IFC);
 	 fa_update_rd (x_direct, x_control.data);
 	 fa_redirect_Fetch (x_control.next_pc);
 	 csrs.ma_incr_instret;
+	 rvfi_report.rvfi_Control (x_direct,
+				   x_control,
+				   csrs.mv_instret,
+				   dummy_epoch);
       end
 
       log_Retire_Control (rg_flog, x_control.exception,
@@ -357,6 +389,10 @@ module mkCPU (CPU_IFC);
 	 fa_update_rd (rg_Dispatch.to_Retire, rg_EX_to_Retire.data);
 	 fa_redirect_Fetch (rg_Dispatch.to_Retire.fallthru_pc);
 	 csrs.ma_incr_instret;
+	 rvfi_report.rvfi_Int (rg_Dispatch.to_Retire,
+			       rg_EX_to_Retire,
+			       csrs.mv_instret,
+			       dummy_epoch);
       end
 
       log_Retire_Int (rg_flog, rg_EX_to_Retire.exception,
@@ -411,6 +447,11 @@ module mkCPU (CPU_IFC);
 	 fa_update_rd (x_direct, truncate (data));
 	 fa_redirect_Fetch (x_direct.fallthru_pc);
 	 csrs.ma_incr_instret;
+	 rvfi_report.rvfi_DMem (x_direct,
+				mem_rsp,
+				truncate (data),
+				csrs.mv_instret,
+				dummy_epoch);
       end
 
       log_DMem_NS_rsp (rg_flog, exception, x_direct, mem_rsp);
@@ -427,23 +468,28 @@ module mkCPU (CPU_IFC);
       rg_exception <= False;
       fa_redirect_Fetch (tvec_pc);
 
+      rvfi_report.rvfi_Exception (rg_Dispatch.to_Retire,
+				  tvec_pc,
+				  csrs.mv_instret,
+				  dummy_epoch);
+
       log_Retire_exception (rg_flog, rg_Dispatch.to_Retire,
 			    rg_epc, is_interrupt, rg_cause, rg_tval);
    endaction;
 
    // ----------------------------------------------------------------
-   function Action a_interrupt (Bit #(4) cause);
+   function Action a_interrupt (Bit #(4) cause1);
       action
 	 Bool        is_interrupt = True;
 	 Bit #(XLEN) tval         = 0;
 	 Bit #(XLEN) tvec_pc <- csrs.mav_exception (rg_pc,
 						    is_interrupt,
-						    cause,
+						    cause1,
 						    tval);
 	 fa_redirect_Fetch (tvec_pc);
 
 	 log_Retire_exception (rg_flog, rg_Dispatch.to_Retire,
-			       rg_pc, is_interrupt, cause, tval);
+			       rg_pc, is_interrupt, cause1, tval);
       endaction
    endfunction
 
@@ -507,6 +553,11 @@ module mkCPU (CPU_IFC);
 
    method Action set_MIP_MTIP (Bit #(1) v) = csrs.set_MIP_MTIP (v);
 
+   // ----------------------------------------------------------------
+   // Output stream of RVFI reports (to verifier/logger)
+   interface FIFOF_O fo_rvfi_reports = rvfi_report.fo_rvfi_reports;
+
+   // ----------------------------------------------------------------
    // Debugger support
    // Requests from/responses to remote debugger
    interface fi_dbg_to_CPU_pkt   = to_FIFOF_I (f_dbg_to_CPU_pkt);

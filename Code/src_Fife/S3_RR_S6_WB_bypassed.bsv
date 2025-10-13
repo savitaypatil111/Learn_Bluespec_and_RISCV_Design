@@ -1,7 +1,6 @@
-// Copyright (c) 2023-2024 Bluespec, Inc.  All Rights Reserved.
-// Author: Rishiyur S. Nikhil
+// Copyright (c) 2023-2025 Rishiyur S. Nikhil.  All Rights Reserved.
 
-package S3_RR_RW;
+package S3_RR_S6_WB_bypassed;
 
 // ****************************************************************
 // Register-read-and-dispatch, and Register-Write
@@ -22,6 +21,7 @@ import Connectable  :: *;
 
 import Cur_Cycle  :: *;
 import Semi_FIFOF :: *;
+import GetPut_Aux :: *;
 
 // ----------------
 // Local imports
@@ -31,13 +31,13 @@ import Arch        :: *;
 import Instr_Bits  :: *;
 import Mem_Req_Rsp :: *;
 import Inter_Stage :: *;
-import GPRs        :: *;
+import GPRs_b      :: *;
 
 import Fn_Dispatch :: *;
 
 // ****************************************************************
 
-interface RR_RW_IFC;
+interface RR_WB_IFC;
    method Action init (Initial_Params initial_params);
 
    // Forward in
@@ -62,7 +62,7 @@ endinterface
 Integer verbosity = 0;
 
 (* synthesize *)
-module mkRR_RW (RR_RW_IFC);
+module mkRR_WB (RR_WB_IFC);
    Reg #(File) rg_flog <- mkReg (InvalidFile);
 
    // Forward in
@@ -80,85 +80,112 @@ module mkRR_RW (RR_RW_IFC);
    // General-Purpose Registers (GPRs)
    GPRs_IFC #(XLEN)  gprs <- mkGPRs_synth;
 
-   // Scoreboard for GPRs
-   Reg #(Scoreboard) rg_scoreboard <- mkReg (replicate (0));
-
-   Reg #(Bit #(8)) rg_stall_count <- mkReg (0);
+   Reg #(Bit #(16)) rg_stall_count <- mkReg (0);
 
    // ================================================================
-   // BEHAVIOR: Forward
+   // BEHAVIOR: Forward: (reg read, reserve scoreboard) from S2 Decode
+   // BEHAVIOR: Backward: (unreserve scoreboard, reg write) from S5 Retire
 
-   rule rl_RR_Dispatch ((! f_RW_from_Retire.notEmpty)
-			&& (! f_Decode_to_RR.first.halt_sentinel));
-      if (rg_stall_count == 'hFF) begin
-	 wr_log2 (rg_flog, $format ("CPU.rl_RR_Dispatch: reached %0d stalls; quitting",
+   rule rl_WB;
+      Bool wb_valid = True;
+      RW_from_Retire wb <- pop (f_RW_from_Retire);
+
+      // Perform GPR transaction for backward path
+      Bool has_rs1 = False; Bit #(5) rs1     = ?;
+      Bool has_rs2 = False; Bit #(5) rs2     = ?;
+      Bool has_rd  = False; Bit #(5) rd      = ?;
+      match { .stall, .rs1_val, .rs2_val }
+      <- gprs.gpr_access (rg_flog, has_rs1, rs1, has_rs2, rs2, has_rd,  rd, wb_valid, wb);
+
+      if (stall) begin
+	 // No action
+	 rg_stall_count <= rg_stall_count + 1;
+      end
+      else
+	 rg_stall_count <= 0;
+   endrule
+
+   // This rule fires when there is
+   //    a token is available from S2 Decode and it is not halt-sentinel
+   // or a token is available from S5 Retire
+   (* descending_urgency = "rl_RR_WB, rl_WB" *)
+   rule rl_RR_WB (! f_Decode_to_RR.first.halt_sentinel);
+      if (rg_stall_count == 'hFFFF) begin
+	 wr_log2 (rg_flog, $format ("CPU.S3.rl_RR_WB: reached %0d stalls; quitting",
 				    rg_stall_count));
 	 $finish (1);
       end
 
-      let x       = f_Decode_to_RR.first;
+      // Get info from Decode_to_RR packet (forward path), if there is one
+      Decode_to_RR x = ?;
+      let instr_valid = True;    // TODO: DELETE? f_Decode_to_RR.notEmpty;
+      let has_rs1 = False;
+      let has_rs2 = False;
+      let has_rd  = False;
+      if (instr_valid) begin
+	 x = f_Decode_to_RR.first;
+	 has_rs1 = x.has_rs1;
+	 has_rs2 = x.has_rs2;
+	 has_rd  = x.has_rd;
+      end
       let instr   = x.instr;
       let opclass = x.opclass;
       let rs1     = instr_rs1 (instr);
       let rs2     = instr_rs2 (instr);
       let rd      = instr_rd  (instr);
 
-      let scoreboard = rg_scoreboard;
-      let busy_rs1   = (x.has_rs1 && (scoreboard [rs1] != 0));
-      let busy_rs2   = (x.has_rs2 && (scoreboard [rs2] != 0));
-      let busy_rd    = (x.has_rd  && (scoreboard [rd]  != 0));
-      Bool stall     = (busy_rs1 || busy_rs2 || busy_rd);
+      // Get info from RW_to_RR packet (backward path), if there is one
+      let wb_valid = f_RW_from_Retire.notEmpty;
+      RW_from_Retire wb = ?;
+      if (wb_valid) begin
+	 wb = f_RW_from_Retire.first;
+	 f_RW_from_Retire.deq;
+      end
+
+      // Perform GPR transaction for both forward and backward path
+      // including bypassing of updated rd_val (from wd) into rs1_val and/or rs2_val
+      match { .stall, .rs1_val, .rs2_val }
+      <- gprs.gpr_access (rg_flog, has_rs1, rs1, has_rs2, rs2, has_rd,  rd, wb_valid, wb);
 
       if (stall) begin
 	 // No action
 	 rg_stall_count <= rg_stall_count + 1;
 
-	 wr_log (rg_flog, $format ("CPU.rl_RR.stall: busy rd:%0d rs1:%0d rs2:%0d",
-				   busy_rd, busy_rs1, busy_rs2));
-	 wr_log_cont (rg_flog, $format ("    ", fshow_Decode_to_RR (x)));
-	 ftrace (rg_flog, x.inum, x.pc, x.instr, "RR.S", $format (""));
+	 if (instr_valid) begin
+	    wr_log (rg_flog, $format ("CPU.rl_RR.hazard_stall:"));
+	    wr_log_cont (rg_flog, $format ("    ", fshow_Decode_to_RR (x)));
+	    ftrace (rg_flog, x.xtra.inum, x.pc, x.instr, "RR.S", $format (""));
+	 end
       end
       else begin
 	 rg_stall_count <= 0;
 
 	 f_Decode_to_RR.deq;
 
-	 // Read GPRs.
-	 // Ok even if instr does not have rs1 or rs2
-	 // values used only if relevant.
-	 let rs1_val = gprs.read_rs1 (rs1);
-	 let rs2_val = gprs.read_rs2 (rs2);
-
 	 // Dispatch to one of the next-stage pipes
-	 Result_Dispatch y <- fn_Dispatch (x, rs1_val, rs2_val, rg_flog);
-
-	 // Update scoreboard for Rd
-	 if (x.has_rd) begin
-	    scoreboard [rd] = 1;
-	    rg_scoreboard <= scoreboard;
-	 end
+	 Result_Dispatch z <- fn_Dispatch (x, rs1_val, rs2_val, rg_flog);
 
 	 // Direct to Retire
-	 f_RR_to_Retire.enq (y.to_Retire);
+	 f_RR_to_Retire.enq (z.to_Retire);
 
 	 // Dispatch
-	 case (y.to_Retire.exec_tag)
+	 case (z.to_Retire.exec_tag)
 	    EXEC_TAG_DIRECT:  noAction;
-	    EXEC_TAG_CONTROL: f_RR_to_EX_Control.enq (y.to_EX_Control);
-	    EXEC_TAG_INT:     f_RR_to_EX_Int.enq (y.to_EX);
-	    EXEC_TAG_DMEM:    f_DMem_S_req.enq (y.to_EX_DMem);
+	    EXEC_TAG_CONTROL: f_RR_to_EX_Control.enq (z.to_EX_Control);
+	    EXEC_TAG_INT:     f_RR_to_EX_Int.enq (z.to_EX);
+	    EXEC_TAG_DMEM:    f_DMem_S_req.enq (z.to_EX_DMem);
 	 endcase
 
 
-	 case (y.to_Retire.exec_tag)
-	    EXEC_TAG_DIRECT:  log_Dispatch_Direct (rg_flog, y.to_Retire);
-	    EXEC_TAG_CONTROL: log_Dispatch_Control (rg_flog, y.to_Retire, y.to_EX_Control);
-	    EXEC_TAG_INT:     log_Dispatch_Int (rg_flog, y.to_Retire, y.to_EX);
-	    EXEC_TAG_DMEM:    log_Dispatch_DMem (rg_flog, y.to_Retire, y.to_EX, y.to_EX_DMem);
+	 case (z.to_Retire.exec_tag)
+	    EXEC_TAG_DIRECT:  log_Dispatch_Direct (rg_flog, z.to_Retire);
+	    EXEC_TAG_CONTROL: log_Dispatch_Control (rg_flog, z.to_Retire, z.to_EX_Control);
+	    EXEC_TAG_INT:     log_Dispatch_Int (rg_flog, z.to_Retire, z.to_EX);
+	    EXEC_TAG_DMEM:    log_Dispatch_DMem (rg_flog, z.to_Retire, z.to_EX, z.to_EX_DMem);
 	    default: begin
 			wr_log (rg_flog, $format ("CPU.Dispatch:"));
 			wr_log_cont (rg_flog,
-				     $format ("    ", fshow_RR_to_Retire (y.to_Retire)));
+				     $format ("    ", fshow_RR_to_Retire (z.to_Retire)));
 			wr_log_cont (rg_flog, $format ("    -> IMPOSSIBLE"));
 			// IMPOSSIBLE
 			$finish (1);
@@ -176,32 +203,14 @@ module mkRR_RW (RR_RW_IFC);
       f_RR_to_Retire.enq (y);
 
       if (verbosity != 0)
-	 $display ("S3_RR_RW_Dispatch: halt requested; sending halt_sentinel to S5_Retire");
-   endrule
-
-   // ================================================================
-   // BEHAVIOR: Backward: reg write from retire
-
-   rule rl_RW_from_Retire;
-      let x <- pop_o (to_FIFOF_O (f_RW_from_Retire));
-
-      Scoreboard scoreboard = rg_scoreboard;
-      scoreboard [x.rd] = 0;
-      rg_scoreboard <= scoreboard;
-
-      if (x.commit)
-	 gprs.write_rd (x.rd, x.data);
-
-      // ---------------- DEBUG
-      wr_log (rg_flog, $format ("CPU.RW:"));
-      wr_log (rg_flog, fshow_RW_from_Retire (x));
-      ftrace (rg_flog, x.inum, x.pc, x.instr, "RW", $format (""));
+	 $display ("S3_RR_Dispatch: halt requested; sending halt_sentinel to S5_Retire");
    endrule
 
    // ================================================================
    // INTERFACE
 
    method Action init (Initial_Params initial_params);
+      $display ("GPRs: bypassed");
       rg_flog <= initial_params.flog;
    endmethod
 

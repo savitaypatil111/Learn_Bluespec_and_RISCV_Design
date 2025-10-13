@@ -1,5 +1,4 @@
-// Copyright (c) 2023-2024 Bluespec, Inc.  All Rights Reserved.
-// Author: Rishiyur S. Nikhil
+// Copyright (c) 2023-2025 Rishiyur S. Nikhil.  All Rights Reserved.
 
 package Fn_Fetch;
 
@@ -36,27 +35,33 @@ function ActionValue #(Result_F)
 		   Bit #(XLEN)  predicted_pc,
 		   Epoch        epoch,
 		   Bit #(64)    inum,
+		   Bit #(64)    arch_inum,
 		   File         flog);
-
    actionvalue
       Result_F y = ?;
       // Info to next stage
-      y.to_D = Fetch_to_Decode {pc:           pc,
-				predicted_pc: predicted_pc,
-				epoch:        epoch,
-				inum:         inum,
-				// Debugger support
-				halt_sentinel:False };
+      y.to_D = Fetch_to_Decode {pc:            pc,
+				predicted_pc:  predicted_pc,
+				epoch:         epoch,
+				halt_sentinel: False,
+
+				xtra: Fetch_to_Decode_Xtra {
+				   inum: inum
+			        }
+	                       };
+
       // Request to IMem
-      y.mem_req = Mem_Req {req_type: funct5_LOAD,
+      y.mem_req = Mem_Req {req_type: funct5_FETCH,
 			   size:     MEM_4B,
 			   addr:     zeroExtend (pc),
-			   data :    ?,
-			   epoch:    epoch,            // Not required for Fetch
-			   // Debugging
-			   inum:     inum,
-			   pc:       pc,
-			   instr:    ?};
+
+			   data :    arch_inum,    // For debugging/TestRIG only
+			   epoch:    epoch,        // Not required for Fetch
+			   xtra: Mem_Req_Xtra {
+			      inum:   inum,
+			      pc:     pc,
+			      instr:  ?}
+			   };
       return y;
    endactionvalue
 endfunction
@@ -69,7 +74,7 @@ function Action log_Fetch (File flog, Fetch_to_Decode to_D, Mem_Req mem_req);
       wr_log (flog, $format ("CPU.Fetch:"));
       wr_log_cont (flog, $format ("    ", fshow_Fetch_to_Decode (to_D)));
       wr_log_cont (flog, $format ("    ", fshow_Mem_Req (mem_req)));
-      ftrace (flog, to_D.inum, to_D.pc, 0, "F", $format(""));
+      ftrace (flog, to_D.xtra.inum, to_D.pc, 0, "F", $format(""));
    endaction
 endfunction
 
@@ -77,7 +82,7 @@ function Action log_Redirect (File flog, Fetch_from_Retire x);
    action
       wr_log (flog, $format ("CPU.Redirect:"));
       wr_log_cont (flog, $format ("    ", fshow_Fetch_from_Retire (x)));
-      ftrace (flog, x.inum, x.pc, x.instr, "Redir", $format(""));
+      ftrace (flog, x.xtra.inum, x.xtra.pc, x.xtra.instr, "Redir", $format(""));
    endaction
 endfunction
 

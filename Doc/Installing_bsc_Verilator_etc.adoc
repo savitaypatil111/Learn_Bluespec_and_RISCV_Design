@@ -1,5 +1,5 @@
 = Notes on installing *bsc* and Verilator and creating an Ubuntu instance on Amazon AWS
-(c) Rishiyur S. Nikhil, Bluespec, Inc. 2024
+(c) Rishiyur S. Nikhil, Bluespec, Inc. 2024-2025
 :revnumber: v1.1
 :sectnums:
 :THIS_FILE: Installing_bsc_Verilator_etc
@@ -23,10 +23,10 @@ processed with the free, open-source `asciidoctor` tool into
 == Introduction
 
 The next two sections briefly describe how to set up the Bluespec
-_bsc_ compiler and the Verilator compiler which are needed to build
-and run Bluesim and Verilator simulations, respectively, for Drum and
-Fife.  We assume the Ubuntu Linux operating system but the setup is
-quite similar on any other flavor of Linux, and on MacOS.
+_bsc_ compiler and the *Verilator* compiler which are needed to build
+and run *Bluesim* and *Verilator* simulations, respectively, for Drum
+and Fife.  We assume the Ubuntu Linux operating system but the setup
+is quite similar on any other flavor of Linux, and on MacOS.
 
 You can install it on your own Ubuntu system; or, you could use an
 Ubuntu instance on Amazon AWS; the last section of this document shows
@@ -35,6 +35,8 @@ how.
 // ****************************************************************
 
 == Installing the _bsc_ compiler
+
+NOTE: Any recent version of _bsc_ should suffice.  We have been using version 2025.01.
 
 * Go to https://github.com/B-Lang-org/bsc[] ; you will be on the README page.
 * Go to the "Download" section, click on the "Releases" link.
@@ -60,38 +62,41 @@ how.
 
 In your installation you will find the following documents (PDFs):
 
-* BSV Language Reference Guide
-* BSV Libraries Reference Guide
-* BSC User Guide
+* *BSV* Language Reference Guide
+* *BSV* Libraries Reference Guide
+* *BSC* User Guide    (user guide for the _bsc_ compiler)
 
 These PDFs can also be downloaded directy from the _bsc_ site.
 
 // ****************************************************************
 
-== Installing Verilator
+== Installing *Verilator*
+
+NOTE: Any recent version of Verilator should suffice.  We have been using Verilator 5.038
 
 Go to https://www.veripool.org/verilator[].  In the "Installation &
 Documentation" section, follow the "Verilator installation and package
 directory structure" link, which will take you to
 https://verilator.org/guide/latest/install.html[].
 
-The easiest way to install Verilator is described in the first section
-on that page, "Package Manager Quick Install", namely to use Ubuntu's
-standard `apt-get install` or `apt install` mechanism.  This usually
-installs a somewhat older version of Verilator than the latest, but
-that is usually fine.
+The easiest way to install *Verilator* is described in the first
+section on that page, "Package Manager Quick Install", namely to use
+Ubuntu's standard `apt-get install` or `apt install` mechanism.  This
+usually installs a somewhat older version of *Verilator* than the
+latest, but that is usually fine.
 
-The main Verilator page (link given above) also has a link to download
-the Verilator user manual: link:https://verilator.org/verilator_doc.pdf[(PDF)]
+The main *Verilator* page (link given above) also has a link to
+download the *Verilator* user manual:
+link:https://verilator.org/verilator_doc.pdf[(PDF)]
 
-=== If you want to install a later version of Verilator ...
+=== If you want to install a later version of *Verilator* ...
 
 Follow the "Detailed Build Instructions" for building verilator from
 sources.
 
 * In the "Install Prerequisites" section, perform all the `sudo
   apt-get install` steps listed, except the last section which is only
-  needed for Verilator developers.
+  needed for *Verilator* developers.
 
 * Skip the "Install SystemC" and "Install GtkWave" sections.
 
@@ -114,7 +119,7 @@ sources.
     $ make test
 ----
 
-The Verilator executable is in `bin/verilator`: make sure it is in your `PATH`
+The *Verilator* executable is in `bin/verilator`: make sure it is in your `PATH`
 
 // ****************************************************************
 
@@ -160,6 +165,6 @@ The Verilator executable is in `bin/verilator`: make sure it is in your `PATH`
 ----
 
 * In Ubuntu, see the previous two sections of this document for
-  installation of _bsc_ and Verilator.
+  installation of _bsc_ and *Verilator*.
 
 // ****************************************************************

@@ -1,7 +1,7 @@
 = Learn Bluespec and RISC-V Design
-(c) Rishiyur S. Nikhil, Bluespec, Inc. 2024
-:revnumber: v0.980
-:revdate: 2024-08-07.A
+(c) Rishiyur S. Nikhil, Bluespec, Inc. 2024-2025
+:revnumber: v0.981
+:revdate: 2025-10-13.A
 :sectnums:
 :toc:
 :toclevels: 3
@@ -12,10 +12,10 @@
 
 [NOTE]
 ====
-Please only submit "Issues", and not PRs, to this repo.  This repo is
-not a development repo, just the place where we assemble
-"distributions" of the book, code, and courseware which are developed
-elsewhere (hence PRs here would not be actionable).
+Please only submit "Issues", and not PRs, to this repository.  This
+repository is not a development repository, just the place where we
+assemble "distributions" of the book, code, and courseware which are
+developed elsewhere (hence PRs here would not be actionable).
 ====
 
 [NOTE]
@@ -23,96 +23,136 @@ elsewhere (hence PRs here would not be actionable).
 This document's source is `README.adoc` and can be read as-is
 in a text-editor or terminal.  It can also be processed with the free,
 open-source `asciidoctor` tool into `README.html` and viewed in
-any browser.
+any browser.  GitHub will automatically display .adoc documents.
 ====
+
+'''
 
 // ****************************************************************
 
 == Introduction
 
 This is a pre-release of free and open-source materials for a course:
-"Learn RISC-V CPU Implementation and BSV", suitable for self-study or
+"Learn RISC-V CPU Implementation and *BSV*", suitable for self-study or
 classroom use.  The goals for the course are:
 
-image::Doc/Figures/Fig_Goals.png[align="center"]
+image::Doc/Figures/RSN_2025-09-01.002.00_Fig_Goals.png[align="center"]
 
 Outline of repository contents:
 ----
 .
+├── README.{adoc,html}
+├── LICENSE
 ├── Book_BLang_RISCV.pdf
-├── Code
-│   ├── src_*
-│   └── Doc/Build_and_Run_Guide.adoc
-├── Slides
-└── Exercises
+├── Code/
+│   ├── src_*/
+│   ├── Build/
+│   ├── Doc/
+│   └── ...
+├── TestRIG
+│   ├── src_Top_TestRIG/
+│   ├── Build/
+│   ├── Doc/
+│   └── ...
+├── Doc
+│   └── Installing_bsc_Verilator_etc.{adoc,html}
+├── Exercises/
+└── Slides/
 ----
 
-`Book_BLang_RISCV.pdf`: Textbook (about 320 pages).
-
-[WARNING]
-====
-
-Apparently the PDF does not render correctly on GitHub in some
+`Book_BLang_RISCV.pdf`:: Textbook (300+ pages) +
++
+WARNING: Apparently the PDF does not render correctly on GitHub in some
 browsers ("Error rendering embedded code; Invalid PDF"), e.g.,
-DuckDuckGo on MacOS Ventura).
-
-It does render correctly in other browsers (e.g., Safari and Firefox on MacOS Ventura).
-
-It does render correctly if you download it use a PDF viewer (e.g., Preview on MacOS Ventura).
-
-====
+DuckDuckGo on some MacOSs). +
+It does render correctly in other browsers (e.g., Safari and Firefox on MacOS). +
+It does render correctly if you download it and use a PDF viewer
+(e.g., Preview on MacOS).
 
 
-`Code/`: Full source codes for Drum and Fife, along with Makefiles to
-build and run (Verilog simulation).  `Build_and_Run_Guide.adoc`
-explains how to compile and run, using free and open-source tools
-(_bsc_ compiler to compile BSV to Verilog, and _Verilator_ to simulate
-the Verilog).  [Coming: separate documentation on how to run Drum and
-Fife on FPGAs on Amazon AWS F1 instances.]
+`Code/`:: Full source codes for *Fife* and *Drum* RISC-V CPUs, along
+with Makefiles to build and run using free and open-source tools.
+`Code/Doc/Build_and_Run_Guide.{adoc,html}` explains how to:
 
-`Slides/`: Lecture slides for Chapters 1-18 (no slides for Chapters 19-20)
+* compile and run in Bluesim (*BSV*'s native code simulator), using the _bsc_ compiler.
 
-`Exercises/`: Code for exercises in book appendix ``Exercises''
+* compile and run in Verilog simulation, using the _bsc_ compiler to
+  compile *BSV* to Verilog, and _Verilator_ to simulate the Verilog. +
+  [Coming: separate documentation on how to run *Fife* and *Drum* on
+  FPGAs.]
+
+`TestRIG/`:: Full source code and build setup for optional top-level
+for fitting *Fife* and *Drum* into University of Cambridge's *TestRIG*
+framework for automated, property-based testing (cf. Haskell
+QuickCheck), comparing correct execution against the official
+*Sail*-based _RISC-V Formal Model_. Relevant links: +
+[verse]
+link:https://en.wikipedia.org/wiki/QuickCheck[]
+link:https://github.com/CTSRD-CHERI/TestRIG[]
+link:https://github.com/riscv/sail-riscv[]
+
+`Slides/`:: Lecture slides for Chapters 1-18 (no slides for Chapters 19-20)
+
+`Exercises/`:: Code for exercises in book appendix ``Exercises''
 
 // ****************************************************************
 
 == Installing prerequisite software tools
 
-To compile and run BSV code in simulation (Drum, Fife, exercises) you
-will need the _bsc_ compiler (compiles BSV source codes into a Bluesim
-simulation executable, and/or also into Verilog).  If you want to
-simulate the generated Verilog (instead of using Bluesim), we
-recommend using Verilator.  Please see: +
-`Doc/Installing_bsc_Verilator_etc.{adoc,html}` +
-for installation guidance.
+The minimum installation is _bsc_ compiler, to compile and run *Fife*,
+*Drum*, and the exercises, using Bluesim.  The _bsc_ repository
+distributes pre-built binaries for various Linuxes and MacOS (just
+download and untar).
+
+_bsc_ can also produce Verilog.
+
+_bsc_-produced Verilog can run in any Verilog simulator.  We recommend
+a specific free and open-source Verilog simulation tool, *Verilator*:
++ link:https://github.com/verilator/verilator[]
+
+If you want to run *TestRIG* for verification, you need a few more
+tools (*Sail*, *TestRIG*).
+
+Please see link:Doc/Installing_bsc_Verilator_etc.html[] for more
+details on installation.
+
+
 
 // ****************************************************************
 
 == About the pedagogic approach
 
-We describe the design of two RISC-V CPU implementations, in this order:
+We take a unique approach in that, as far as possible, we try to
+"factor out" RISC-V ISA semantics questions from pipelining questions,
+but describing the design of _two_ RISC-V CPU implementations, in this
+order:
 
-* *Drum*, an "FSM" implementation, which almost looks like a software
+*Drum*:: An "FSM" implementation, which almost looks like a software
   RISC-V simulator written in C, except that it is fully synthesizable
-  and runnable on FPGAs.
+  to hardware (runnable on FPGAs, ASICs).
 
-* *Fife*, a 5+ stage, mostly in-order, pipelined implementation,
+*Fife*:: A 6+ stage, mostly in-order, pipelined implementation,
   including simple branch prediction, scoreboarding, in-order
   retirement, and speculative STOREs with a store-buffer.
 
 The two implementations share _all_ the functional parts of RISC-V
 code, which are covered in the first part of the book, with *Drum*.
-By the time we reach the second part of the book, on *Fife*, we focus
-purely on pipelining questions, since all RISC-V-specific semantics
-have already been covered with *Drum*.
+By the time we reach the second part of the book, on *Fife*, we can
+focus purely on pipelining questions, since all RISC-V-specific
+semantics have already been covered with *Drum*.
 
-We interleave RISC-V and BSV topics in an incremental and mutually
+Both CPUs are useful in hardware: *Drum* will have lower performance
+(IPC, or instructions per cycle) than *Fife*, but likely lower area
+and energy cost.  *Drum* can also be used as a hardware-synthesizable
+"reference model" for *Fife*.
+
+We interleave RISC-V and *BSV* topics in an incremental and mutually
 reinforcing way, and describe the full design and verification process
 and the code in detail.  We hope to avoid steep learning curves for
-BSV and for RISC-V.  This diagram shows the interplay between BSV and
+*BSV* and for RISC-V.  This diagram shows the interplay between *BSV* and
 RISC-V chapters:
 
-image::Doc/Figures/Fig_Chapter_Roadmap.png[align="center"]
+image::Doc/Figures/RSN_2025-10-13.000.00_Learn_Chapter_Roadmap.png[align="center"]
 
 The exercises in `Exercises/` are synchronized with the Book, in which
 there are small sections titled **Exercises**, each pointing to a
@@ -123,18 +163,18 @@ exercise, which should compile and run immediately with the provided
 Makefile (this can also be demo'd during a lecture).  The README then
 has suggestions for variations for students to try on their own.
 
-*Drum* and *Fife* implement the "RV32I" subset of the RISC-V
+*Fife* and *Drum* implement the "RV32I" subset of the RISC-V
 Unprivileged ISA, plus a few features from the Privileged
 specification sufficient to to handle illegal instructions and other
 traps, and interrupts.  This is adequate for small embedded systems.
-The book discusses how to extend *Drum* and *Fife* into 64-bit
+The book discusses how to extend *Fife* and *Drum* into 64-bit
 Linux-capability.
 
 We welcome feedback about your learning experience.
 
 // ****************************************************************
 
-== About RISC-V and BSV
+== About RISC-V and *BSV*
 
 RISC-V is an open-standard ISA (Instruction-Set Architecture).  ISA
 specification documents can be found at
@@ -143,42 +183,72 @@ https://riscv.org/[] also contains much additional useful material, in
 particular information on GNU compilation/debugging tools gcc, gdb,
 etc.
 
-Bluespec BSV is a free, open-source HLHDL (High-Level Hardware Design
+Bluespec *BSV* is a free, open-source HLHDL (High-Level Hardware Design
 Language), a significant improvement in expressive power and
 simplicity compared to Verilog/SystemVerilog/VHDL.  Its free,
 open-source compiler is available at:
 link:https://github.com/B-Lang-org/bsc[].  An appendix in the book
-discusses "Why BSV?" in more detail.
+discusses "Why *BSV*?" in more detail.
 
 // ****************************************************************
 
-== Status (as of August 7, 2024)
+== Status
+
+This repository is expected to be updated periodically as we improve
+the book and the code.  When you clone it, you may wish to keep track
+of commit/date so that you can check if you have the latest version,
+and/or revert to an earlier version if needed.
+
+The following are in reverse chronological order (latest first).
+
+// ================================================================
+
+''''
+
+=== Status, October 13, 2025    (2025-10-13)
+
+*Book*:: Upgraded to latest code changes. Other stylistic edits
+
+*Code*:: Upgraded to run *Fife* and *Drum* under *TestRIG*. A few
+ *bugfixes uncovered by TestRIG*. Added bypassed register file.
++
+Tested on ISA tests from
+https://github.com/riscv-software-src/riscv-tests[].  *Fife* and
+*Drum* PASS all 39 `rv32ui-p-...` tests, and 10/11 of the
+`rv32mi-p-...` tests (we ignore the 11th test, `rv32mi-p-breakpoint`,
+because it requires Debug Module CSRs which are not currently
+implemented in *Fife* and *Drum*).
+
+* *Slides* (for lectures): No change from 2024-08-07 version; needs updating.
+
+* *Exercises* (for labs): Added a few more exercises.
+
+// ================================================================
+
+''''
+
+=== Status, August 7, 2024 (2024-08-07)
 
 Here, ``complete'' means full first draft.  Once each component is
 complete, we expect a final, complete, careful editing pass for
 smoothing and cleanup.
 
 * *Book*: complete except for the final two chapters (19, 20) which
-  contain suggestions for future study of BSV and future study of
+  contain suggestions for future study of *BSV* and future study of
   RISC-V, respectively.
 
-* *Code*: Drum and Fife codes complete.
+* *Code*: *Fife* and *Drum* codes complete.
 +
 Tested on ISA tests from
-https://github.com/riscv-software-src/riscv-tests[].  Drum and Fife
-PASS all 39 `rv32ui-p-...` tests, and 10/11 of the `rv32mi-p-...`
-tests (we ignore the 11th test, `rv32mi-p-breakpoint`, because it
-requires Debug Module CSRs which are not currently implemented in Drum
-and Fife).
+https://github.com/riscv-software-src/riscv-tests[].  *Fife* and
+*Drum* PASS all 39 `rv32ui-p-...` tests, and 10/11 of the
+`rv32mi-p-...` tests (we ignore the 11th test, `rv32mi-p-breakpoint`,
+because it requires Debug Module CSRs which are not currently
+implemented in *Fife* and *Drum*).
 
 * *Slides* (for lectures): complete.
 
 * *Exercises* (for labs): In progress; expected completion by end of
   August 2024.
-
-This repository is expected to be updated frequently through the end
-of August 2024 as we complete the few remaining materials.  When you
-clone it, you may wish to keep track of commit/date so you can revert
-to that version if needed.
 
 // ****************************************************************

@@ -1,5 +1,4 @@
-// Copyright (c) 2023-2024 Bluespec, Inc.  All Rights Reserved.
-// Author: Rishiyur S. Nikhil
+// Copyright (c) 2023-2025 Rishiyur S. Nikhil.  All Rights Reserved.
 
 package CPU;
 
@@ -36,14 +35,17 @@ import CPU_IFC     :: *;
 
 import S1_Fetch      :: *;
 import S2_Decode     :: *;
-import S3_RR_RW      :: *;
+
+// import S3_RR_S6_WB   :: *;    // Without bypassing
+import S3_RR_S6_WB_bypassed :: *;       // With bypassing
+
 import S4_EX_Control :: *;
 import S4_EX_Int     :: *;
 import S5_Retire     :: *;
 
 // ****************************************************************
 
-String cpu_name = "Fife v0.85 2024-09-08";
+String cpu_name = "Fife v0.90 2025-07-12";
 
 // ****************************************************************
 
@@ -56,7 +58,7 @@ module mkCPU (CPU_IFC);
 
    Fetch_IFC       stage_F          <- mkFetch;
    Decode_IFC      stage_D          <- mkDecode;
-   RR_RW_IFC       stage_RR_RW      <- mkRR_RW;
+   RR_WB_IFC       stage_RR_WB      <- mkRR_WB;
    EX_Control_IFC  stage_EX_Control <- mkEX_Control;  // Branch, JAL, JALR
    EX_Int_IFC      stage_EX_Int     <- mkEX_Int;      // Integer ops
    Retire_IFC      stage_Retire     <- mkRetire;
@@ -66,13 +68,13 @@ module mkCPU (CPU_IFC);
 
    // Fetch->Decode->RR-Dispatch, and direct path RR-Dispatch->Retire
    mkConnection (stage_F.fo_Fetch_to_Decode,  stage_D.fi_Fetch_to_Decode);
-   mkConnection (stage_D.fo_Decode_to_RR,     stage_RR_RW.fi_Decode_to_RR);
-   mkConnection (stage_RR_RW.fo_RR_to_Retire, stage_Retire.fi_RR_to_Retire);
+   mkConnection (stage_D.fo_Decode_to_RR,     stage_RR_WB.fi_Decode_to_RR);
+   mkConnection (stage_RR_WB.fo_RR_to_Retire, stage_Retire.fi_RR_to_Retire);
 
    // RR-Dispatch->various EX
-   mkConnection (stage_RR_RW.fo_RR_to_EX_Control,
+   mkConnection (stage_RR_WB.fo_RR_to_EX_Control,
 		 stage_EX_Control.fi_RR_to_EX_Control);
-   mkConnection (stage_RR_RW.fo_RR_to_EX_Int,
+   mkConnection (stage_RR_WB.fo_RR_to_EX_Int,
 		 stage_EX_Int.fi_RR_to_EX_Int);
 
    // Various EX->Retire
@@ -87,7 +89,7 @@ module mkCPU (CPU_IFC);
    // Fetch<-Retire (redirection)
    mkConnection (stage_Retire.fo_Fetch_from_Retire, stage_F.fi_Fetch_from_Retire);
    // RR-Dispatch<-Retire (register writeback)
-   mkConnection (stage_Retire.fo_RW_from_Retire, stage_RR_RW.fi_RW_from_Retire);
+   mkConnection (stage_Retire.fo_RW_from_Retire, stage_RR_WB.fi_RW_from_Retire);
 
    // ================================================================
    // BEHAVIOR: all normal running behavior is inside the above modules
@@ -105,7 +107,7 @@ module mkCPU (CPU_IFC);
 
       stage_F.init (initial_params);
       stage_D.init (initial_params);
-      stage_RR_RW.init (initial_params);
+      stage_RR_WB.init (initial_params);
       stage_EX_Control.init (initial_params);
       stage_EX_Int.init (initial_params);
       stage_Retire.init (initial_params);
@@ -128,7 +130,7 @@ module mkCPU (CPU_IFC);
    interface fi_IMem_rsp = stage_D.fi_IMem_to_Decode;
 
    // DMem, speculative
-   interface fo_DMem_S_req    = stage_RR_RW.fo_DMem_S_req;
+   interface fo_DMem_S_req    = stage_RR_WB.fo_DMem_S_req;
    interface fi_DMem_S_rsp    = stage_Retire.fi_DMem_S_rsp;
    interface fo_DMem_S_commit = stage_Retire.fo_DMem_S_commit;
 
@@ -142,6 +144,11 @@ module mkCPU (CPU_IFC);
 
    method Action set_MIP_MTIP (Bit #(1) v) = stage_Retire.set_MIP_MTIP (v);
 
+   // ----------------------------------------------------------------
+   // Output stream of RVFI reports (to verifier/logger)
+   interface fo_rvfi_reports = stage_Retire.fo_rvfi_reports;
+
+   // ----------------------------------------------------------------
    // Debugger support
    // Requests from/responses to remote debugger
    interface fi_dbg_to_CPU_pkt   = to_FIFOF_I (f_dbg_to_CPU_pkt);

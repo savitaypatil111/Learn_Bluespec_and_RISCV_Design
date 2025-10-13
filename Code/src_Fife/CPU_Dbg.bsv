@@ -1,5 +1,4 @@
-// Copyright (c) 2023-2024 Bluespec, Inc.  All Rights Reserved.
-// Author: Rishiyur S. Nikhil
+// Copyright (c) 2023-2025 Rishiyur S. Nikhil.  All Rights Reserved.
 
 // ****************************************************************
 // This is a BSV 'include' file, not a standalone BSV package.
@@ -70,9 +69,9 @@
       if (verbosity_CPU_Dbg != 0)
 	 $display ("CPU_Dbg.stmt_rw_gpr");
       if ((pkt_in.rw_op == Dbg_RW_READ) && (pkt_in.rw_addr < 32))
-	 rg_data <= stage_RR_RW.gpr_read (truncate (pkt_in.rw_addr));
+	 rg_data <= stage_RR_WB.gpr_read (truncate (pkt_in.rw_addr));
       else if (pkt_in.rw_addr < 32)
-	 stage_RR_RW.gpr_write (truncate (pkt_in.rw_addr), pkt_in.rw_wdata);
+	 stage_RR_WB.gpr_write (truncate (pkt_in.rw_addr), pkt_in.rw_wdata);
       action
 	 let rsp = Dbg_from_CPU_Pkt {pkt_type: ((pkt_in.rw_addr < 32)
 						? Dbg_from_CPU_RW_OK
@@ -125,9 +124,11 @@
 				      endcase,
 				addr: zeroExtend (pkt_in.rw_addr),
 				data: zeroExtend (pkt_in.rw_wdata),
-				inum: 0,
-				pc: 0,
-				instr: 0};
+				xtra: Mem_Req_Xtra {
+				   inum:  0,
+				   pc:    0,
+				   instr: 0}
+				};
 	 f_dbg_to_mem_req.enq (mem_req);
 	 if (verbosity_CPU_Dbg > 1) begin
 	    $display ("CPU_Dbg.stmt_rw_mem");

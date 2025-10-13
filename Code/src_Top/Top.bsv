@@ -1,5 +1,4 @@
-// Copyright (c) 2023-2024 Bluespec, Inc.  All Rights Reserved.
-// Author: Rishiyur S. Nikhil
+// Copyright (c) 2023-2025 Rishiyur S. Nikhil.  All Rights Reserved.
 
 package Top;
 
@@ -83,12 +82,13 @@ module mkTop (Empty);
    rule rl_step1 (rg_top_step == 1);
       let with_debugger <- $test$plusargs ("debug");
 
-
-      let init_params = Initial_Params {flog:              rg_logfile,
-					pc_reset_value:    'h_8000_0000,
+      let init_params = Initial_Params {pc_reset_value:    'h_8000_0000,
 					addr_base_mem:     'h_8000_0000,
 					size_B_mem:        'h_1000_0000,
+
+					flog:              rg_logfile,
 					dbg_listen_socket: (with_debugger ? 30000 : 0)};
+
       cpu.init (init_params);
       mems_devices.init (init_params);
       dbg_stub.init (init_params);
@@ -136,6 +136,13 @@ module mkTop (Empty);
    rule rl_relay_MTIP;
       let t = mems_devices.mv_MTIP;
       cpu.set_MIP_MTIP (t);
+   endrule
+
+   // ================================================================
+   // Drain RVFI packets
+
+   rule rl_drain_RVFI;
+      let t <- pop_o (cpu.fo_rvfi_reports);
    endrule
 
    // ================================================================

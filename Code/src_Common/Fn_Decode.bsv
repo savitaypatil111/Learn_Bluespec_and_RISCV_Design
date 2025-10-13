@@ -1,5 +1,4 @@
-// Copyright (c) 2023-2024 Bluespec, Inc.  All Rights Reserved.
-// Author: Rishiyur S. Nikhil
+// Copyright (c) 2023-2025 Rishiyur S. Nikhil.  All Rights Reserved.
 
 package Fn_Decode;
 
@@ -37,26 +36,29 @@ function ActionValue #(Decode_to_RR)
       let fallthru_pc = x_F_to_D.pc + 4;
 
       // Baseline info to next stage
-      let y = Decode_to_RR {pc:           x_F_to_D.pc,
+      let y = Decode_to_RR {pc:            x_F_to_D.pc,
+			    predicted_pc:  x_F_to_D.predicted_pc,
+			    epoch:         x_F_to_D.epoch,
+			    halt_sentinel: False,
 
-			    exception:    False,
-			    cause:        ?,
-			    tval:         0,
+			    // exception
+			    exception:     False,
+			    cause:         ?,
+			    tval:          0,
 
 			    // not-exception
-			    fallthru_pc:  fallthru_pc,
-			    instr:        instr,
-			    opclass:      ?,
-			    has_rs1:      False,
-			    has_rs2:      False,
-			    has_rd:       False,
-			    writes_mem:   False,
-			    imm:          0,
-			    predicted_pc: x_F_to_D.predicted_pc,
-			    epoch:        x_F_to_D.epoch,
-			    inum:         x_F_to_D.inum,
-			    // Debugger support
-			    halt_sentinel:False };
+			    fallthru_pc:   fallthru_pc,
+			    instr:         instr,
+			    opclass:       ?,
+			    has_rs1:       False,
+			    has_rs2:       False,
+			    has_rd:        False,
+			    writes_mem:    False,
+			    imm:           0,
+
+			    xtra: Decode_to_RR_Xtra {
+			       inum: x_F_to_D.xtra.inum
+			    }};
 
       Bool non_zero_rd = (rd != 0);
 
@@ -157,7 +159,7 @@ function Action log_Decode (File flog, Decode_to_RR y, Mem_Rsp rsp_IMem);
       wr_log (flog, ($format("CPU.Decode:\n    ")
 		     + fshow_Decode_to_RR (y) + $format ("\n    ")
 		     + fshow_Mem_Rsp (rsp_IMem, True)));
-      ftrace (flog, y.inum, y.pc, y.instr, "D", $format(""));
+      ftrace (flog, y.xtra.inum, y.pc, y.instr, "D", $format(""));
    endaction
 endfunction
 
