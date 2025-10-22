@@ -99,7 +99,7 @@ function ActionValue #(Bit #(XLEN))
 			     y_OP_IMM, y_OP_IMM, iv1, iv1, iv2, iv2));
       end
 
-      Bit #(XLEN) result = y_OP | y_OP_IMM;
+      Bit #(XLEN) result = y_OP | y_OP_IMM;  // cheaper to build an OR than a Multiplexer 
 
       // DEBUGGING
       if (! implemented) begin
