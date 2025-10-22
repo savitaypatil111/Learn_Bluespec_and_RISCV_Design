@@ -30,8 +30,8 @@ interface CPU_IFC;
    method Action init (Initial_Params initial_params);
 
    // IMem
-   interface FIFOF_O #(Mem_Req) fo_IMem_req;
-   interface FIFOF_I #(Mem_Rsp) fi_IMem_rsp;
+   interface FIFOF_O #(Mem_Req) fo_IMem_req;     // output side of FIFO
+   interface FIFOF_I #(Mem_Rsp) fi_IMem_rsp;     // input side of FIFO; a memory reponse is coming 
 
    // DMem, speculative
    interface FIFOF_O #(Mem_Req) fo_DMem_S_req;
