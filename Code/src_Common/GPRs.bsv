@@ -42,24 +42,24 @@ endinterface
 // that is available on the subsequent clock.
 
 module mkGPRs (GPRs_IFC #(xlen));
-   RegFile #(Bit #(5), Bit #(xlen)) rf <- mkRegFileFull;
+   RegFile #(Bit #(5), Bit #(xlen)) rf <- mkRegFileFull;  //initantiate the module
 
    // ================================================================
    // Initialization
-   Reg #(Bit #(6)) rg_init_index <- mkReg (0);
+   Reg #(Bit #(6)) rg_init_index <- mkReg (0);  // register that has 6 bits, initially the index mkReg is 0
 
-   Bool initialized = (rg_init_index [5] == 1'b1);
+   Bool initialized = (rg_init_index [5] == 1'b1);  // local construct initialized
 
-   rule rl_init (! initialized);
+   rule rl_init (! initialized);                   // an infinite process which will run when ! initialized is true
       rf.upd (truncate (rg_init_index), 0);
-      rg_init_index <= rg_init_index + 1;
+      rg_init_index <= rg_init_index + 1;  // update the process
       if (rg_init_index == 31)
 	 $display ("GPRs: initialized to 0");
    endrule
 
    // ================================================================
 
-   method Bit #(xlen) read_rs1 (Bit #(5) rs1) if (initialized);
+   method Bit #(xlen) read_rs1 (Bit #(5) rs1) if (initialized);  // addiotnal condition( impilicit method any outside trying to read and write is stalled)
       return ((rs1 == 0) ? 0 : rf.sub (rs1));
    endmethod
 
