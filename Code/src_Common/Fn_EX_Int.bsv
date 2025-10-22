@@ -45,7 +45,7 @@ function ActionValue #(EX_to_Retire)
 			       instr:  instr}
 			    };
 
-      if (is_LUI (instr)) begin
+      if (is_LUI (instr)) begin   // load upper immediate
 	 y.data = x.imm;
 
 	 wr_log_cont (logf, $format ("fn_EX_IALU: LUI x%0d <= %0h",
